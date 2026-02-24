@@ -1,0 +1,839 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Editor API Test Dashboard</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        .header {
+            background: white;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+        }
+
+        .header h1 {
+            color: #333;
+            margin-bottom: 10px;
+        }
+
+        .auth-section {
+            display: flex;
+            gap: 15px;
+            align-items: center;
+            flex-wrap: wrap;
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 8px;
+        }
+
+        .auth-section input {
+            padding: 10px;
+            border: 2px solid #e0e0e0;
+            border-radius: 6px;
+            flex: 1;
+            min-width: 250px;
+            font-size: 14px;
+        }
+
+        .auth-section button {
+            padding: 10px 20px;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: background 0.3s;
+        }
+
+        .auth-section button:hover {
+            background: #5a67d8;
+        }
+
+        .auth-status {
+            padding: 10px;
+            border-radius: 6px;
+            font-weight: 500;
+        }
+
+        .auth-status.success {
+            background: #c6f6d5;
+            color: #22543d;
+        }
+
+        .auth-status.error {
+            background: #fed7d7;
+            color: #742a2a;
+        }
+
+        .dashboard-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+            gap: 20px;
+        }
+
+        .card {
+            background: white;
+            border-radius: 10px;
+            padding: 20px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+        }
+
+        .card h2 {
+            color: #333;
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #667eea;
+        }
+
+        .card h3 {
+            color: #555;
+            margin: 15px 0 10px;
+            font-size: 16px;
+        }
+
+        .form-group {
+            margin-bottom: 15px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            color: #555;
+            font-weight: 500;
+            font-size: 14px;
+        }
+
+        .form-group input,
+        .form-group select,
+        .form-group textarea {
+            width: 100%;
+            padding: 10px;
+            border: 2px solid #e0e0e0;
+            border-radius: 6px;
+            font-size: 14px;
+            transition: border-color 0.3s;
+        }
+
+        .form-group input:focus,
+        .form-group select:focus,
+        .form-group textarea:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .form-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+        }
+
+        button {
+            padding: 12px 24px;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 14px;
+            transition: all 0.3s;
+            width: 100%;
+        }
+
+        button:hover {
+            background: #5a67d8;
+            transform: translateY(-1px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        button.secondary {
+            background: #48bb78;
+        }
+
+        button.secondary:hover {
+            background: #38a169;
+        }
+
+        button.warning {
+            background: #ed8936;
+        }
+
+        button.warning:hover {
+            background: #dd6b20;
+        }
+
+        button.danger {
+            background: #f56565;
+        }
+
+        button.danger:hover {
+            background: #e53e3e;
+        }
+
+        .response-area {
+            margin-top: 15px;
+            padding: 15px;
+            background: #1a202c;
+            color: #cbd5e0;
+            border-radius: 6px;
+            font-family: 'Monaco', 'Menlo', monospace;
+            font-size: 13px;
+            max-height: 300px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+        }
+
+        .filter-bar {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 15px;
+            flex-wrap: wrap;
+        }
+
+        .filter-bar input,
+        .filter-bar select {
+            flex: 1;
+            min-width: 150px;
+            padding: 8px;
+            border: 2px solid #e0e0e0;
+            border-radius: 4px;
+        }
+
+        .data-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 10px;
+        }
+
+        .data-table th {
+            text-align: left;
+            padding: 10px;
+            background: #f7fafc;
+            color: #4a5568;
+            font-weight: 600;
+            font-size: 12px;
+            text-transform: uppercase;
+        }
+
+        .data-table td {
+            padding: 10px;
+            border-bottom: 1px solid #e2e8f0;
+            font-size: 13px;
+        }
+
+        .data-table tr:hover {
+            background: #f7fafc;
+        }
+
+        .badge {
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .badge.success {
+            background: #c6f6d5;
+            color: #22543d;
+        }
+
+        .badge.warning {
+            background: #feebc8;
+            color: #744210;
+        }
+
+        .badge.error {
+            background: #fed7d7;
+            color: #742a2a;
+        }
+
+        .badge.info {
+            background: #bee3f8;
+            color: #2c5282;
+        }
+
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .tabs {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+
+        .tab {
+            padding: 10px 20px;
+            background: #e2e8f0;
+            color: #4a5568;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.3s;
+            width: auto;
+        }
+
+        .tab.active {
+            background: #667eea;
+            color: white;
+        }
+
+        .json-editor {
+            font-family: monospace;
+            min-height: 100px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📝 Editor API Test Dashboard</h1>
+            <div class="auth-section">
+                <input type="text" id="tokenInput" placeholder="Enter JWT Token" value="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...">
+                <input type="text" id="baseUrlInput" placeholder="Base URL" value="http://localhost:5000/api">
+                <button onclick="saveAuth()">Save Auth</button>
+                <button class="secondary" onclick="testConnection()">Test Connection</button>
+                <div id="authStatus" class="auth-status"></div>
+            </div>
+        </div>
+
+        <div class="tabs">
+            <button class="tab active" onclick="switchTab('manuscripts')">📄 Manuscripts</button>
+            <button class="tab" onclick="switchTab('reviewers')">👥 Reviewers</button>
+            <button class="tab" onclick="switchTab('assignments')">📋 Assignments</button>
+            <button class="tab" onclick="switchTab('issues')">📚 Issues</button>
+        </div>
+
+        <!-- Manuscripts Tab -->
+        <div id="manuscripts-tab" class="dashboard-grid">
+            <!-- Get Manuscripts -->
+            <div class="card">
+                <h2>📋 Get Manuscripts</h2>
+                <div class="filter-bar">
+                    <input type="text" id="manuscriptSearch" placeholder="Search...">
+                    <select id="manuscriptStatus">
+                        <option value="">All Status</option>
+                        <option value="Submitted">Submitted</option>
+                        <option value="Editor Review">Editor Review</option>
+                        <option value="Under Review">Under Review</option>
+                        <option value="Revision Required">Revision Required</option>
+                        <option value="Accepted">Accepted</option>
+                    </select>
+                    <select id="manuscriptType">
+                        <option value="">All Types</option>
+                        <option value="medicine">Medicine</option>
+                        <option value="oncology">Oncology</option>
+                        <option value="neurology">Neurology</option>
+                        <option value="surgery">Surgery</option>
+                        <option value="genetics">Genetics</option>
+                        <option value="cardiology">Cardiology</option>
+                    </select>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Page</label>
+                        <input type="number" id="manuscriptPage" value="1" min="1">
+                    </div>
+                    <div class="form-group">
+                        <label>Limit</label>
+                        <input type="number" id="manuscriptLimit" value="10" min="1" max="100">
+                    </div>
+                </div>
+                <button onclick="getManuscripts()">Fetch Manuscripts</button>
+                <div id="manuscriptsResponse" class="response-area">Response will appear here...</div>
+            </div>
+
+            <!-- Get Single Manuscript -->
+            <div class="card">
+                <h2>🔍 Get Manuscript by ID</h2>
+                <div class="form-group">
+                    <label>Manuscript ID</label>
+                    <input type="text" id="manuscriptId" placeholder="Enter manuscript ID">
+                </div>
+                <button onclick="getManuscriptById()">Fetch Manuscript</button>
+                <div id="singleManuscriptResponse" class="response-area">Response will appear here...</div>
+            </div>
+
+            <!-- Submit to EIC -->
+            <div class="card">
+                <h2>📤 Submit to Editor-in-Chief</h2>
+                <div class="form-group">
+                    <label>Manuscript ID</label>
+                    <input type="text" id="submitManuscriptId" placeholder="Enter manuscript ID">
+                </div>
+                <div class="form-group">
+                    <label>Decision</label>
+                    <select id="submitDecision">
+                        <option value="direct_publication">Direct Publication</option>
+                        <option value="minor_revision">Minor Revision</option>
+                        <option value="major_revision">Major Revision</option>
+                        <option value="reject">Reject</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Decision Letter</label>
+                    <textarea id="submitLetter" rows="3" placeholder="Enter decision letter...">The manuscript has been reviewed and we recommend...</textarea>
+                </div>
+                <div class="form-group">
+                    <label>Internal Notes</label>
+                    <textarea id="submitNotes" rows="2" placeholder="Internal notes for EIC...">Please check the methodology section carefully.</textarea>
+                </div>
+                <button class="warning" onclick="submitToEIC()">Submit to EIC</button>
+                <div id="submitResponse" class="response-area">Response will appear here...</div>
+            </div>
+        </div>
+
+        <!-- Reviewers Tab (Hidden by default) -->
+        <div id="reviewers-tab" class="dashboard-grid" style="display: none;">
+            <!-- Get Reviewers -->
+            <div class="card">
+                <h2>👥 Get Reviewers</h2>
+                <div class="filter-bar">
+                    <input type="text" id="reviewerSearch" placeholder="Search by specialty...">
+                    <select id="reviewerAvailability">
+                        <option value="">All Availability</option>
+                        <option value="Available">Available</option>
+                        <option value="Busy">Busy</option>
+                        <option value="Unavailable">Unavailable</option>
+                    </select>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Page</label>
+                        <input type="number" id="reviewerPage" value="1" min="1">
+                    </div>
+                    <div class="form-group">
+                        <label>Limit</label>
+                        <input type="number" id="reviewerLimit" value="10" min="1" max="100">
+                    </div>
+                </div>
+                <button onclick="getReviewers()">Fetch Reviewers</button>
+                <div id="reviewersResponse" class="response-area">Response will appear here...</div>
+            </div>
+
+            <!-- Get Reviewer by ID -->
+            <div class="card">
+                <h2>🔍 Get Reviewer by ID</h2>
+                <div class="form-group">
+                    <label>Reviewer ID</label>
+                    <input type="text" id="reviewerId" placeholder="Enter reviewer ID">
+                </div>
+                <button onclick="getReviewerById()">Fetch Reviewer</button>
+                <div id="singleReviewerResponse" class="response-area">Response will appear here...</div>
+            </div>
+        </div>
+
+        <!-- Assignments Tab -->
+        <div id="assignments-tab" class="dashboard-grid" style="display: none;">
+            <!-- Assign Single Reviewer -->
+            <div class="card">
+                <h2>➕ Assign Single Reviewer</h2>
+                <div class="form-group">
+                    <label>Manuscript ID</label>
+                    <input type="text" id="assignManuscriptId" placeholder="Enter manuscript ID">
+                </div>
+                <div class="form-group">
+                    <label>Reviewer ID</label>
+                    <input type="text" id="assignReviewerId" placeholder="Enter reviewer ID">
+                </div>
+                <div class="form-group">
+                    <label>Deadline</label>
+                    <input type="date" id="assignDeadline" placeholder="Enter Date">
+                </div>
+                <button onclick="assignReviewer()">Assign Reviewer</button>
+                <div id="assignResponse" class="response-area">Response will appear here...</div>
+            </div>
+
+            <!-- Assign Bulk Reviewers -->
+            <div class="card">
+                <h2>📦 Assign Bulk Reviewers</h2>
+                <div class="form-group">
+                    <label>Manuscript ID</label>
+                    <input type="text" id="bulkManuscriptId" placeholder="Enter manuscript ID">
+                </div>
+                <div class="form-group">
+                    <label>Reviewer IDs (JSON Array)</label>
+                    <textarea id="bulkReviewerIds" class="json-editor" rows="3">["reviewer-id-1", "reviewer-id-2"]</textarea>
+                </div>
+                <button onclick="assignBulkReviewers()">Assign Bulk Reviewers</button>
+                <div id="bulkAssignResponse" class="response-area">Response will appear here...</div>
+            </div>
+        </div>
+
+        <!-- Issues Tab -->
+        <div id="issues-tab" class="dashboard-grid" style="display: none;">
+            <!-- Create Issue -->
+            <div class="card">
+                <h2>📚 Create Issue</h2>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Volume Number</label>
+                        <input type="number" id="volumeNumber" value="1">
+                    </div>
+                    <div class="form-group">
+                        <label>Issue Number</label>
+                        <input type="number" id="issueNumber" value="1">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Issue Title</label>
+                    <input type="text" id="issueTitle" placeholder="Enter issue title">
+                </div>
+                <div class="form-group">
+                    <label>Description</label>
+                    <textarea id="issueDescription" rows="2" placeholder="Issue description..."></textarea>
+                </div>
+                <div class="form-group">
+                    <label>Planned Publication Date</label>
+                    <input type="date" id="publicationDate">
+                </div>
+                <div class="form-group">
+                    <label>Manuscript IDs (JSON Array)</label>
+                    <textarea id="issueManuscripts" class="json-editor" rows="2">[]</textarea>
+                </div>
+                <div class="form-check">
+                    <label style="display: flex; align-items: center; gap: 10px; margin: 10px 0;">
+                        <input type="checkbox" id="finalFilesReceived"> Final Files Received
+                    </label>
+                    <label style="display: flex; align-items: center; gap: 10px; margin: 10px 0;">
+                        <input type="checkbox" id="copyrightCompleted"> Copyright Agreement Completed
+                    </label>
+                    <label style="display: flex; align-items: center; gap: 10px; margin: 10px 0;">
+                        <input type="checkbox" id="metadataValidated"> Metadata Validated
+                    </label>
+                </div>
+                <button onclick="createIssue()">Create Issue</button>
+                <div id="createIssueResponse" class="response-area">Response will appear here...</div>
+            </div>
+
+            <!-- Download Issue Metadata -->
+            <div class="card">
+                <h2>⬇️ Download Issue Metadata</h2>
+                <div class="form-group">
+                    <label>Issue ID</label>
+                    <input type="text" id="downloadIssueId" placeholder="Enter issue ID">
+                </div>
+                <button onclick="downloadIssueMetadata()">Download Metadata</button>
+                <div id="downloadIssueResponse" class="response-area">Response will appear here...</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let authToken = '';
+        let baseUrl = '';
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', function() {
+            const savedToken = localStorage.getItem('editorApiToken');
+            const savedUrl = localStorage.getItem('editorBaseUrl');
+            
+            if (savedToken) {
+                document.getElementById('tokenInput').value = savedToken;
+                authToken = savedToken;
+            }
+            
+            if (savedUrl) {
+                document.getElementById('baseUrlInput').value = savedUrl;
+                baseUrl = savedUrl;
+            }
+        });
+
+        function saveAuth() {
+            authToken = document.getElementById('tokenInput').value;
+            baseUrl = document.getElementById('baseUrlInput').value;
+            
+            localStorage.setItem('editorApiToken', authToken);
+            localStorage.setItem('editorBaseUrl', baseUrl);
+            
+            showStatus('Auth saved successfully!', 'success');
+        }
+
+        async function testConnection() {
+            try {
+                const response = await fetch(`${baseUrl}/editor/manuscripts?limit=1`, {
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
+                
+                if (response.ok) {
+                    showStatus('Connection successful! ✅', 'success');
+                } else {
+                    showStatus('Connection failed! Check your token and URL ❌', 'error');
+                }
+            } catch (error) {
+                showStatus('Connection error: ' + error.message, 'error');
+            }
+        }
+
+        function showStatus(message, type) {
+            const statusEl = document.getElementById('authStatus');
+            statusEl.textContent = message;
+            statusEl.className = `auth-status ${type}`;
+            setTimeout(() => {
+                statusEl.textContent = '';
+                statusEl.className = 'auth-status';
+            }, 5000);
+        }
+
+        function switchTab(tabName) {
+            // Hide all tabs
+            document.getElementById('manuscripts-tab').style.display = 'none';
+            document.getElementById('reviewers-tab').style.display = 'none';
+            document.getElementById('assignments-tab').style.display = 'none';
+            document.getElementById('issues-tab').style.display = 'none';
+            
+            // Update tab buttons
+            document.querySelectorAll('.tab').forEach(tab => {
+                tab.classList.remove('active');
+            });
+            
+            // Show selected tab
+            document.getElementById(`${tabName}-tab`).style.display = 'grid';
+            event.target.classList.add('active');
+        }
+
+        async function apiCall(endpoint, method = 'GET', body = null) {
+            const options = {
+                method,
+                headers: {
+                    'Authorization': `Bearer ${authToken}`,
+                    'Content-Type': 'application/json'
+                }
+            };
+            
+            if (body) {
+                options.body = JSON.stringify(body);
+            }
+            
+            try {
+                const response = await fetch(`${baseUrl}${endpoint}`, options);
+                const data = await response.json();
+                return { response, data };
+            } catch (error) {
+                return { error: error.message };
+            }
+        }
+
+        // Manuscript functions
+        async function getManuscripts() {
+            const search = document.getElementById('manuscriptSearch').value;
+            const status = document.getElementById('manuscriptStatus').value;
+            const type = document.getElementById('manuscriptType').value;
+            const page = document.getElementById('manuscriptPage').value;
+            const limit = document.getElementById('manuscriptLimit').value;
+            
+            let url = `/editor/manuscripts?page=${page}&limit=${limit}`;
+            if (search) url += `&search=${encodeURIComponent(search)}`;
+            if (status) url += `&status=${encodeURIComponent(status)}`;
+            if (type) url += `&manuscript_type=${encodeURIComponent(type)}`;
+            
+            const result = await apiCall(url);
+            displayResponse('manuscriptsResponse', result);
+        }
+
+        async function getManuscriptById() {
+            const id = document.getElementById('manuscriptId').value;
+            if (!id) {
+                alert('Please enter a manuscript ID');
+                return;
+            }
+            
+            const result = await apiCall(`/editor/manuscripts/${id}`);
+            displayResponse('singleManuscriptResponse', result);
+        }
+
+        async function submitToEIC() {
+            const id = document.getElementById('submitManuscriptId').value;
+            if (!id) {
+                alert('Please enter a manuscript ID');
+                return;
+            }
+            
+            const body = {
+                decision: document.getElementById('submitDecision').value,
+                decision_letter: document.getElementById('submitLetter').value,
+                internal_notes: document.getElementById('submitNotes').value
+            };
+            
+            const result = await apiCall(`/editor/manuscripts/${id}/submit-to-eic`, 'POST', body);
+            displayResponse('submitResponse', result);
+        }
+
+        // Reviewer functions
+        async function getReviewers() {
+            const search = document.getElementById('reviewerSearch').value;
+            const availability = document.getElementById('reviewerAvailability').value;
+            const page = document.getElementById('reviewerPage').value;
+            const limit = document.getElementById('reviewerLimit').value;
+            
+            let url = `/editor/reviewers?page=${page}&limit=${limit}`;
+            if (search) url += `&search=${encodeURIComponent(search)}`;
+            if (availability) url += `&availability=${encodeURIComponent(availability)}`;
+            
+            const result = await apiCall(url);
+            displayResponse('reviewersResponse', result);
+        }
+
+        async function getReviewerById() {
+            const id = document.getElementById('reviewerId').value;
+            if (!id) {
+                alert('Please enter a reviewer ID');
+                return;
+            }
+            
+            const result = await apiCall(`/editor/reviewers/${id}`);
+            displayResponse('singleReviewerResponse', result);
+        }
+
+        // Assignment functions
+        async function assignReviewer() {
+            const manuscriptId = document.getElementById('assignManuscriptId').value;
+            const reviewerId = document.getElementById('assignReviewerId').value;
+            const deadline = document.getElementById('assignDeadline').value;
+            console.log(deadline);
+            
+            if (!manuscriptId || !reviewerId) {
+                alert('Please enter both manuscript ID and reviewer ID');
+                return;
+            }
+            
+            const body = {
+                manuscript_id: manuscriptId,
+                user_id: reviewerId,
+                deadline: deadline,
+            };
+            
+            const result = await apiCall('/editor/assignments/single', 'POST', body);
+            displayResponse('assignResponse', result);
+        }
+
+        async function assignBulkReviewers() {
+            const manuscriptId = document.getElementById('bulkManuscriptId').value;
+            const reviewerIdsText = document.getElementById('bulkReviewerIds').value;
+            
+            if (!manuscriptId) {
+                alert('Please enter manuscript ID');
+                return;
+            }
+            
+            try {
+                const reviewer_array = JSON.parse(reviewerIdsText);
+                const body = {
+                    id: manuscriptId,
+                    reviewer_array
+                };
+                
+                const result = await apiCall('/editor/assignments/bulk', 'POST', body);
+                displayResponse('bulkAssignResponse', result);
+            } catch (error) {
+                alert('Invalid JSON for reviewer IDs');
+            }
+        }
+
+        // Issue functions
+        async function createIssue() {
+            const manuscriptsIds = JSON.parse(document.getElementById('issueManuscripts').value || '[]');
+            
+            const body = {
+                volume_number: parseInt(document.getElementById('volumeNumber').value),
+                issue_number: parseInt(document.getElementById('issueNumber').value),
+                planned_publication_date: document.getElementById('publicationDate').value || null,
+                issue_title: document.getElementById('issueTitle').value,
+                description: document.getElementById('issueDescription').value,
+                manuscripts_ids: manuscriptsIds,
+                final_files_received: document.getElementById('finalFilesReceived').checked,
+                copyright_agreement_completed: document.getElementById('copyrightCompleted').checked,
+                metadata_validated: document.getElementById('metadataValidated').checked
+            };
+            
+            const result = await apiCall('/editor/issues', 'POST', body);
+            displayResponse('createIssueResponse', result);
+        }
+
+        async function downloadIssueMetadata() {
+            const id = document.getElementById('downloadIssueId').value;
+            if (!id) {
+                alert('Please enter issue ID');
+                return;
+            }
+            
+            try {
+                const response = await fetch(`${baseUrl}/editor/issues/${id}/download-metadata`, {
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`
+                    }
+                });
+                
+                if (response.ok) {
+                    const blob = await response.blob();
+                    const url = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `issue-${id}-metadata.json`;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    window.URL.revokeObjectURL(url);
+                    
+                    document.getElementById('downloadIssueResponse').textContent = 'Download started!';
+                } else {
+                    const data = await response.json();
+                    document.getElementById('downloadIssueResponse').textContent = JSON.stringify(data, null, 2);
+                }
+            } catch (error) {
+                document.getElementById('downloadIssueResponse').textContent = `Error: ${error.message}`;
+            }
+        }
+
+        function displayResponse(elementId, result) {
+            const element = document.getElementById(elementId);
+            
+            if (result.error) {
+                element.textContent = `Error: ${result.error}`;
+                element.style.color = '#fc8181';
+            } else {
+                element.textContent = JSON.stringify(result.data, null, 2);
+                element.style.color = '#cbd5e0';
+            }
+        }
+    </script>
+</body>
+</html>
