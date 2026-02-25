@@ -1,4 +1,4 @@
-// import { sequelize } from 'sequelize'; // Adjust path to your sequelize instance
+import sequelize from '../../config/database.js';
 import {
   User,
   Author,

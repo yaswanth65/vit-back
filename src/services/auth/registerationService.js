@@ -9,7 +9,8 @@ import emailService from '../emailService.js';
 export const requestRegistrationOTP = async (email) => {
   const authMeta = await AuthenticationMeta.findOne({
     include: [{ 
-      model: User, 
+      model: User,
+      as: 'user', // Required alias
       where: { email, is_active: false } // Only for accounts in progress
     }]
   });
@@ -49,7 +50,8 @@ const verifyRegistrationOTP = async (email, rawOtp) => {
   // Find the metadata linked to the inactive user
   const authMeta = await AuthenticationMeta.findOne({
     include: [{ 
-      model: User, 
+      model: User,
+      as: 'user', // Required alias
       where: { email, is_active: false } 
     }]
   });

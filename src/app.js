@@ -8,6 +8,7 @@ import cors from 'cors';
 import helmet from 'helmet';
 import morgan from 'morgan';
 import dotenv from 'dotenv';
+import session from 'express-session';
 import myManuscriptRoutes from './routes/authorRoutes/myManuscriptsRoutes.js';
 import authRoutes from './routes/auth/authRoutes.js';
 import invitationRoutes from './routes/invitationRoutes.js';
@@ -16,6 +17,7 @@ import adminRoutes from './routes/adminRoutes/adminRoutes.js';
 import authorRoutes from './routes/authorRoutes/authorRoutes.js';
 import editorRoutes from './routes/editor/editorRoutes.js';
 import eicRoutes from './routes/eic/eicRoutes.js';
+import './config/passport.js'; // Initialize Passport OAuth strategies
 
 // Load environment variables
 dotenv.config();
@@ -31,11 +33,11 @@ app.use(
     crossOriginResourcePolicy: { policy: 'cross-origin' },
     contentSecurityPolicy: {
       directives: {
-        defaultSrc: ['self'],
-        scriptSrc: ['self', 'unsafe-inline'],
-        styleSrc: ['self', 'unsafe-inline'],
-        imgSrc: ['self', 'data:', 'https:'],
-        connectSrc: ['self'],
+        defaultSrc: ["'self'"],
+        scriptSrc: ["'self'", "'unsafe-inline'"],
+        styleSrc: ["'self'", "'unsafe-inline'"],
+        imgSrc: ["'self'", 'data:', 'https:'],
+        connectSrc: ["'self'"],
       },
     },
   })
@@ -84,6 +86,21 @@ if (process.env.NODE_ENV === 'development') {
   app.use(morgan('combined'));
 }
 
+// ==================== Session Management ====================
+
+// Session middleware for OAuth (required by Passport)
+app.use(
+  session({
+    secret: process.env.SESSION_SECRET || 'vituor-session-secret-change-in-production',
+    resave: false,
+    saveUninitialized: false,
+    cookie: {
+      secure: process.env.NODE_ENV === 'production', // HTTPS only in production
+      httpOnly: true,
+      maxAge: 1000 * 60 * 60 * 24, // 24 hours
+    },
+  })
+);
 
 // ==================== Health Check ====================
 

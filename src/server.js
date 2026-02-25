@@ -9,7 +9,7 @@ import dotenv from 'dotenv';
 dotenv.config();
 
 import app from './app.js';
-import { testConnection,} from './config/database.js';
+import { testConnection, syncDatabase } from './config/database.js';
 
 // Server configuration
 const PORT = process.env.PORT || 5000;
@@ -31,7 +31,7 @@ async function startServer() {
     console.log('📊 Connecting to PostgreSQL database...');
     await testConnection();
 
-    // Sync database models
+    // Sync database models (disabled - use migrations or manual ALTER TABLE instead)
     // console.log('🔄 Synchronizing database models...');
     // await syncDatabase({ alter: NODE_ENV === 'development' });    
 

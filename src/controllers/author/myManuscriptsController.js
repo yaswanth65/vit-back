@@ -24,17 +24,23 @@ export const createDraft = async (req, res) => {
       return res.status(404).json({ message: 'Author profile not found. Please complete your profile first.' });
     }
 
+    // Handle keywords: convert string to array if needed
+    let keywordsArray = keywords;
+    if (typeof keywords === 'string') {
+      keywordsArray = keywords.split(',').map(k => k.trim()).filter(k => k);
+    }
+
     const manuscript = await Manuscript.create({
       author_id: author.id,
       title,
       abstract,
-      keywords,
+      keywords: keywordsArray,
       category,
       manuscript_type,
       status: 'Draft',
     });
 
-    res.status(201).json(manuscript);
+    res.status(201).json({ manuscript });
   } catch (err) {
     console.log(err);
     res.status(500).json({ message: err.message });
@@ -53,7 +59,7 @@ export const updateDetails = async (req, res) => {
 
     await manuscript.update(req.body);
 
-    res.json(manuscript);
+    res.json({ manuscript });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
@@ -73,7 +79,7 @@ export const updateAuthors = async (req, res) => {
     manuscript.authors = authors;
     await manuscript.save();
 
-    res.json(manuscript);
+    res.json({ manuscript });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
@@ -119,7 +125,7 @@ export const uploadFiles = async (req, res) => {
     }
 
     await manuscript.save();
-    res.json(manuscript);
+    res.json({ manuscript });
   } catch (err) {
     console.log(err)
     res.status(500).json({ message: err.message });
@@ -171,7 +177,7 @@ export const submitManuscript = async (req, res) => {
     manuscript.status = 'Submitted';
     await manuscript.save();
 
-    res.json(manuscript);
+    res.json({ manuscript });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
@@ -183,7 +189,8 @@ export const submitManuscript = async (req, res) => {
 export const getManuscriptById = async (req, res) => {
   try {
     const manuscript = await Manuscript.findByPk(req.params.id);
-    res.json(manuscript);
+    if (!manuscript) return res.status(404).json({ message: 'Manuscript not found' });
+    res.json({ manuscript });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
@@ -191,8 +198,11 @@ export const getManuscriptById = async (req, res) => {
 
 export const getMyManuscripts = async (req, res) => {
   try {
-    const authorId = req.user?.id || req.query.author_id;
-    // use req.user.id if auth middleware exists
+    // Get Author profile ID from User ID
+    const author = await Author.findOne({ where: { user_id: req.user.id } });
+    if (!author) return res.status(404).json({ message: 'Author profile not found' });
+    
+    const authorId = author.id;
 
     const {
       page = 1,
@@ -231,7 +241,7 @@ export const getMyManuscripts = async (req, res) => {
     });
 
     res.json({
-      data: rows,
+      manuscripts: rows,
       pagination: {
         total: count,
         page: Number(page),
