@@ -1,7 +1,7 @@
 import authService from '../../services/auth/authService.js';
 import tokenService from '../../services/auth/tokenService.js';
 import magicLinkService from '../../services/auth/magicLinkService.js';
-import { AuthenticationMeta } from '../../database/models/index.js';
+import { AuthenticationMeta, Editor, User } from '../../database/models/index.js';
 import emailService from '../../services/emailService.js';
 import { Op } from 'sequelize';
 
@@ -293,6 +293,40 @@ const changePassword = async (req, res) => {
   }
 };
 
+/**
+ * 8. Get Available Categories (Public)
+ * Returns all categories that have editors assigned
+ */
+const getAvailableCategories = async (req, res) => {
+  try {
+    // Find all active editors with their assigned categories
+    const editors = await Editor.findAll({
+      attributes: ['assigned_category'],
+      include: [{
+        model: User,
+        as: 'user',
+        attributes: ['is_active'],
+        where: { is_active: true }
+      }],
+      where: {
+        assigned_category: { [Op.ne]: null }
+      }
+    });
+
+    // Extract unique categories
+    const categories = editors.map(e => e.assigned_category).filter(Boolean);
+    
+    res.json({
+      success: true,
+      categories,
+      message: 'Available categories retrieved successfully'
+    });
+  } catch (error) {
+    console.error('Get Categories Error:', error);
+    res.status(500).json({ message: error.message || 'Internal server error.' });
+  }
+};
+
 export default {
   login,
   requestMagicLink,
@@ -302,5 +336,6 @@ export default {
   getMe,
   requestPasswordReset,
   resetPassword,
-  changePassword
+  changePassword,
+  getAvailableCategories
 };

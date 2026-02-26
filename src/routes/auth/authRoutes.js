@@ -12,6 +12,9 @@ const router = express.Router();
 // Traditional Login
 router.post('/login', authController.login);
 
+// Get Available Categories (for manuscript submission - public route)
+router.get('/categories', authController.getAvailableCategories);
+
 // Magic Link Flow
 router.post('/magic-link/request', authController.requestMagicLink);
 router.get('/magic-link/verify', authController.verifyMagicLink);

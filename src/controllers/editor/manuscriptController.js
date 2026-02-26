@@ -1,8 +1,97 @@
 // controllers/editor/manuscriptController.js
-import { Editor, Issue, Manuscript, Reviewer, AssignReviewer } from '../../database/models/index.js';
+import { Editor, Issue, Manuscript, Reviewer, AssignReviewer, User, Review, Author } from '../../database/models/index.js';
 import { uploadToR2, deleteFromR2 } from '../../services/r2Services.js';
 import { Op } from 'sequelize';
 import sequelize from '../../config/database.js';
+
+/**
+ * Get Editor Dashboard Stats
+ * Returns statistics for manuscripts in the editor's assigned category
+ */
+export const getEditorStats = async (req, res) => {
+    try {
+        const user_id = req.user.id;
+        
+        const editor = await Editor.findOne({ where: { user_id } });
+        if (!editor) {
+            return res.status(404).json({ message: 'Editor profile not found' });
+        }
+
+        const category = editor.assigned_category;
+
+        // Get all manuscripts in editor's category
+        const [
+            newSubmissions,
+            needsReviewers,
+            awaitingReviews,
+            readyForDecision,
+            totalManuscripts
+        ] = await Promise.all([
+            // New Submissions - Status is 'Submitted' (not yet assigned reviewers)
+            Manuscript.count({
+                where: {
+                    category,
+                    status: 'Submitted'
+                }
+            }),
+            // Needs Reviewers - Has fewer than required reviewers assigned
+            Manuscript.count({
+                where: {
+                    category,
+                    status: { [Op.in]: ['Submitted', 'Editor Review'] },
+                    [Op.or]: [
+                        { reviewer_ids: null },
+                        { reviewer_ids: { [Op.eq]: [] } },
+                        sequelize.where(
+                            sequelize.fn('array_length', sequelize.col('reviewer_ids'), 1),
+                            { [Op.lt]: 2 }
+                        )
+                    ]
+                }
+            }),
+            // Awaiting Reviews - Reviewers assigned but reviews not complete
+            Manuscript.count({
+                where: {
+                    category,
+                    status: 'Under Review'
+                }
+            }),
+            // Ready for Decision - All reviews complete
+            Manuscript.count({
+                where: {
+                    category,
+                    status: { [Op.in]: ['Under Review', 'Editor Review'] },
+                    editor_submitted_to_eic: false
+                },
+                include: [{
+                    model: AssignReviewer,
+                    as: 'assignments',
+                    required: true,
+                    where: {
+                        status: 'completed'
+                    }
+                }]
+            }),
+            // Total manuscripts in category
+            Manuscript.count({
+                where: { category }
+            })
+        ]);
+
+        res.json({
+            success: true,
+            new_submissions: newSubmissions,
+            needs_reviewers: needsReviewers,
+            awaiting_reviews: awaitingReviews,
+            ready_for_decision: readyForDecision,
+            total_manuscripts: totalManuscripts,
+            category: editor.assigned_category
+        });
+    } catch (error) {
+        console.error('Editor Stats Error:', error);
+        res.status(500).json({ message: error.message });
+    }
+};
 
 export const getManuscripts = async (req, res) => {
     try {
@@ -50,16 +139,69 @@ export const getManuscripts = async (req, res) => {
 export const getManuscriptsById = async (req, res) => {
     try {
         const manuscript_id = req.params.id;
-        const manuscript = await Manuscript.findByPk(manuscript_id);
+        const user_id = req.user.id;
+
+        // Verify editor has access to this manuscript's category
+        const editor = await Editor.findOne({ where: { user_id } });
+        if (!editor) {
+            return res.status(404).json({ message: 'Editor profile not found' });
+        }
+
+        const manuscript = await Manuscript.findByPk(manuscript_id, {
+            include: [
+                {
+                    model: Author,
+                    as: 'author',
+                    include: [{
+                        model: User,
+                        as: 'user',
+                        attributes: ['first_name', 'last_name', 'email', 'prefix']
+                    }]
+                },
+                {
+                    model: Review,
+                    as: 'reviews',
+                    include: [{
+                        model: Reviewer,
+                        as: 'reviewer',
+                        include: [{
+                            model: User,
+                            as: 'user',
+                            attributes: ['first_name', 'last_name', 'prefix']
+                        }]
+                    }]
+                },
+                {
+                    model: AssignReviewer,
+                    as: 'assignments',
+                    include: [{
+                        model: Reviewer,
+                        as: 'reviewer',
+                        include: [{
+                            model: User,
+                            as: 'user',
+                            attributes: ['first_name', 'last_name', 'prefix']
+                        }]
+                    }]
+                }
+            ]
+        });
+
         if (!manuscript) {
             return res.status(404).json({ message: 'Manuscript Not Found' });
         }
 
+        // Verify manuscript is in editor's category
+        if (manuscript.category !== editor.assigned_category) {
+            return res.status(403).json({ message: 'You do not have permission to view this manuscript' });
+        }
+
         res.json({
             data: manuscript,
-            message: 'Successfull getManuscriptById Execution',
+            message: 'Successful getManuscriptById Execution',
         });
     } catch (error) {
+        console.error('getManuscriptsById Error:', error);
         res.status(500).json({
             message: error.message,
         });
@@ -72,13 +214,17 @@ export const getAllReviewers = async (req, res, next) => {
         const offset = (page - 1) * limit;
 
         const editor_id = req.user.id;
-        const editor = await Editor.findOne({ where: { user_id: editor_id } }); // Assuming Editor model check
+        const editor = await Editor.findOne({ where: { user_id: editor_id } });
+
+        if (!editor) {
+            return res.status(404).json({ message: 'Editor profile not found' });
+        }
 
         const whereClause = { assigned_category: editor.assigned_category };
 
         if (search) {
             whereClause[Op.or] = [
-                { specialties: { [Op.overlap]: [search] } }, // Search within array
+                { specialties: { [Op.overlap]: [search] } },
                 { assigned_category: { [Op.iLike]: `%${search}%` } }
             ];
         }
@@ -87,6 +233,13 @@ export const getAllReviewers = async (req, res, next) => {
 
         const { rows, count } = await Reviewer.findAndCountAll({
             where: whereClause,
+            include: [{
+                model: User,
+                as: 'user',
+                attributes: ['id', 'first_name', 'last_name', 'email', 'prefix', 'is_active'],
+                where: { is_active: true },
+                required: true
+            }],
             limit: Number(limit),
             offset: Number(offset),
             distinct: true
@@ -284,7 +437,7 @@ export const assignReviewersInBulk = async (req, res) => {
             });
         }
 
-        // 2️⃣ Get Editor profile (IMPORTANT FIX)
+        // 2️⃣ Get Editor profile
         const editorProfile = await Editor.findOne({
             where: { user_id: req.user.id },
         });
@@ -296,26 +449,58 @@ export const assignReviewersInBulk = async (req, res) => {
             });
         }
 
-        // 3️⃣ Validate reviewers exist
+        // 2.5️⃣ Verify manuscript category matches editor's assigned category
+        if (manuscript.category !== editorProfile.assigned_category) {
+            await transaction.rollback();
+            return res.status(403).json({
+                message: 'You can only assign reviewers to manuscripts in your assigned category',
+            });
+        }
+
+        // 3️⃣ Check existing assignments to enforce MAX 3 reviewers limit
+        const existingAssignments = await AssignReviewer.findAll({
+            where: {
+                manuscript_id,
+                manuscript_version: manuscript.version || 1,
+                status: { [Op.notIn]: ['rejected'] } // Don't count rejected assignments
+            },
+        });
+
+        const currentReviewerCount = existingAssignments.length;
+        const maxReviewers = manuscript.max_reviewer_limit || 3;
+        
+        if (currentReviewerCount >= maxReviewers) {
+            await transaction.rollback();
+            return res.status(400).json({
+                message: `Maximum ${maxReviewers} reviewers already assigned for this manuscript`,
+            });
+        }
+
+        const availableSlots = maxReviewers - currentReviewerCount;
+        
+        if (reviewer_ids.length > availableSlots) {
+            await transaction.rollback();
+            return res.status(400).json({
+                message: `Only ${availableSlots} reviewer slot(s) available. You are trying to assign ${reviewer_ids.length} reviewers.`,
+            });
+        }
+
+        // 4️⃣ Validate reviewers exist AND match the manuscript's category (assigned_category)
         const reviewers = await Reviewer.findAll({
-            where: { id: reviewer_ids },
+            where: { 
+                id: reviewer_ids,
+                assigned_category: manuscript.category // Only reviewers with matching category
+            },
         });
 
         if (reviewers.length !== reviewer_ids.length) {
             await transaction.rollback();
             return res.status(400).json({
-                message: 'One or more reviewers not found',
+                message: 'One or more reviewers not found or do not match the manuscript category',
             });
         }
 
-        // 4️⃣ Filter already assigned reviewers for this version
-        const existingAssignments = await AssignReviewer.findAll({
-            where: {
-                manuscript_id,
-                manuscript_version: manuscript.current_version || 1,
-            },
-        });
-
+        // 5️⃣ Filter already assigned reviewers for this version
         const alreadyAssignedReviewerIds = existingAssignments.map(
             (a) => a.reviewer_id
         );
@@ -331,7 +516,7 @@ export const assignReviewersInBulk = async (req, res) => {
             });
         }
 
-        // 5️⃣ Create assignments
+        // 6️⃣ Create assignments
         const assignments = await Promise.all(
             reviewersToAssign.map((reviewer_id) =>
                 AssignReviewer.create(
@@ -339,7 +524,7 @@ export const assignReviewersInBulk = async (req, res) => {
                         manuscript_id,
                         reviewer_id,
                         assigned_by: editorProfile.id,
-                        manuscript_version: manuscript.current_version || 1,
+                        manuscript_version: manuscript.version || 1,
                         deadline,
                         status: 'assigned',
                     },
@@ -348,11 +533,19 @@ export const assignReviewersInBulk = async (req, res) => {
             )
         );
 
+        // 7️⃣ Update manuscript status if reviewers assigned
+        if (assignments.length > 0 && manuscript.status === 'Submitted') {
+            manuscript.status = 'Under Review';
+            await manuscript.save({ transaction });
+        }
+
         await transaction.commit();
 
         return res.status(201).json({
             message: 'Reviewers assigned successfully',
             assigned_count: assignments.length,
+            max_reviewers: maxReviewers,
+            total_assigned: currentReviewerCount + assignments.length,
             assignments,
         });
     } catch (error) {
@@ -366,7 +559,6 @@ export const assignReviewersInBulk = async (req, res) => {
 export const assignReviewer = async (req, res) => {
     try {
         const { manuscript_id, user_id, deadline } = req.body;
-        // const editorId = req.user?.id || req.body.assigned_by;
 
         if (!manuscript_id || !user_id || !deadline) {
             return res.status(400).json({
@@ -380,13 +572,7 @@ export const assignReviewer = async (req, res) => {
             return res.status(404).json({ message: 'Manuscript not found' });
         }
 
-        // check reviewer exists
-        // const reviewer = await Reviewer.findByPk(user_id);
-        const reviewer = await Reviewer.findOne({ where: { user_id: user_id } });
-        if (!reviewer) {
-            return res.status(404).json({ message: 'Reviewer not found' });
-        }
-
+        // Get editor profile
         const editorProfile = await Editor.findOne({
             where: { user_id: req.user.id }
         });
@@ -395,20 +581,78 @@ export const assignReviewer = async (req, res) => {
             return res.status(403).json({ message: 'Editor profile not found' });
         }
 
+        // Verify manuscript category matches editor's assigned category
+        if (manuscript.category !== editorProfile.assigned_category) {
+            return res.status(403).json({
+                message: 'You can only assign reviewers to manuscripts in your assigned category'
+            });
+        }
+
+        // Check reviewer exists and matches category
+        const reviewer = await Reviewer.findOne({ 
+            where: { 
+                user_id: user_id,
+                assigned_category: manuscript.category 
+            } 
+        });
+        if (!reviewer) {
+            return res.status(404).json({ 
+                message: 'Reviewer not found or does not match manuscript category' 
+            });
+        }
+
+        // Check existing assignments to enforce MAX 3 reviewers limit
+        const existingAssignments = await AssignReviewer.count({
+            where: {
+                manuscript_id,
+                manuscript_version: manuscript.version || 1,
+                status: { [Op.notIn]: ['rejected'] }
+            }
+        });
+
+        const maxReviewers = manuscript.max_reviewer_limit || 3;
+        if (existingAssignments >= maxReviewers) {
+            return res.status(400).json({
+                message: `Maximum ${maxReviewers} reviewers already assigned for this manuscript`
+            });
+        }
+
+        // Check if reviewer is already assigned
+        const alreadyAssigned = await AssignReviewer.findOne({
+            where: {
+                manuscript_id,
+                reviewer_id: reviewer.id,
+                manuscript_version: manuscript.version || 1
+            }
+        });
+
+        if (alreadyAssigned) {
+            return res.status(400).json({
+                message: 'Reviewer is already assigned to this manuscript'
+            });
+        }
+
         // create assignment
         const assignment = await AssignReviewer.create({
             manuscript_id: manuscript_id,
             reviewer_id: reviewer.id,
-            // assigned_by: editorId,
             assigned_by: editorProfile.id,
-            manuscript_version: manuscript.current_version || 1,
+            manuscript_version: manuscript.version || 1,
             deadline: deadline,
             status: 'assigned',
         });
 
+        // Update manuscript status if first reviewer assigned
+        if (manuscript.status === 'Submitted') {
+            manuscript.status = 'Under Review';
+            await manuscript.save();
+        }
+
         res.json({
             message: 'Reviewer assigned successfully',
             assignment,
+            total_assigned: existingAssignments + 1,
+            max_reviewers: maxReviewers
         });
     } catch (error) {
         console.error(error);

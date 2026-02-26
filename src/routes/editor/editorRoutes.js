@@ -7,6 +7,10 @@ const router = express.Router();
 router.use(requireAuth);
 router.use(requireRole('Editor'));
 
+// ==================== DASHBOARD STATS ====================
+// GET editor dashboard statistics
+router.get('/stats', editorController.getEditorStats);
+
 // ==================== MANUSCRIPT MANAGEMENT ====================
 // GET manuscripts with pagination, search, and filtering
 router.get('/manuscripts', editorController.getManuscripts);
