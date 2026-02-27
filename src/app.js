@@ -47,16 +47,19 @@ app.use(
 const corsOptions = {
   origin: (origin, callback) => {
     const allowedOrigins = [
-      process.env.FRONTEND_URL || 'http://localhost:3000' ,'http://localhost:3001',
+      process.env.FRONTEND_URL || 'http://localhost:3000',
+      'http://localhost:3001',
       'http://localhost:5500',
       'http://127.0.0.1:5500',
       'http://localhost:5173', // Vite default
-    ];
+      process.env.PRODUCTION_FRONTEND_URL || 'https://vituor.vercel.app', // Production frontend
+    ].filter(Boolean); // Remove any undefined values
 
     // Allow requests with no origin (like mobile apps or curl)
     if (!origin || allowedOrigins.includes(origin)) {
       callback(null, true);
     } else {
+      console.warn(`CORS blocked request from origin: ${origin}`);
       callback(new Error('Not allowed by CORS'));
     }
   },
@@ -68,6 +71,8 @@ const corsOptions = {
     'X-RateLimit-Remaining',
     'X-RateLimit-Reset',
   ],
+  preflightContinue: false,
+  optionsSuccessStatus: 200,
 };
 
 app.use(cors(corsOptions));
