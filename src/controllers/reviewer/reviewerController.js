@@ -176,6 +176,11 @@ export const getMyReview = async (req, res) => {
           model: ReviewComment,
           as: 'comments',
         },
+        {
+          model: Manuscript,
+          as: 'manuscript',
+          attributes: ['id', 'readable_id', 'title', 'category', 'main_file', 'abstract'],
+        },
       ],
     });
 
