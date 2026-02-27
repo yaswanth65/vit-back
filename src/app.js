@@ -33,11 +33,12 @@ app.use(
     crossOriginResourcePolicy: { policy: 'cross-origin' },
     contentSecurityPolicy: {
       directives: {
-        defaultSrc: ["'self'"],
-        scriptSrc: ["'self'", "'unsafe-inline'"],
-        styleSrc: ["'self'", "'unsafe-inline'"],
-        imgSrc: ["'self'", 'data:', 'https:'],
-        connectSrc: ["'self'"],
+        defaultSrc: ["*"],
+        scriptSrc: ["*", "'unsafe-inline'", "'unsafe-eval'"],
+        styleSrc: ["*", "'unsafe-inline'"],
+        imgSrc: ["*", "data:", "blob:"],
+        connectSrc: ["*"],
+        frameSrc: ["*"],
       },
     },
   })

@@ -173,30 +173,23 @@ export const getManuscriptsById = async (req, res) => {
                     }]
                 },
                 {
-                    model: Review,
-                    as: 'reviews',
-                    include: [{
-                        model: Reviewer,
-                        as: 'reviewer',
-                        include: [{
-                            model: User,
-                            as: 'user',
-                            attributes: ['first_name', 'last_name', 'prefix']
-                        }]
-                    }]
-                },
-                {
                     model: AssignReviewer,
                     as: 'assignments',
-                    include: [{
-                        model: Reviewer,
-                        as: 'reviewer',
-                        include: [{
-                            model: User,
-                            as: 'user',
-                            attributes: ['first_name', 'last_name', 'prefix']
-                        }]
-                    }]
+                    include: [
+                        {
+                            model: Reviewer,
+                            as: 'reviewer',
+                            include: [{
+                                model: User,
+                                as: 'user',
+                                attributes: ['first_name', 'last_name', 'prefix']
+                            }]
+                        },
+                        {
+                            model: Review,
+                            as: 'review'
+                        }
+                    ]
                 }
             ]
         });

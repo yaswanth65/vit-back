@@ -121,15 +121,15 @@ Review.belongsTo(Manuscript, {
   as: 'manuscript',
 });
 
-// Reviewer → Reviews (1:N)
-Reviewer.hasMany(Review, {
-  foreignKey: 'user_id',
-  as: 'completedReviews',
+// AssignReviewer → Review (1:1) - Review is created per assignment
+AssignReviewer.hasOne(Review, {
+  foreignKey: 'assign_reviewer_id',
+  as: 'review',
   onDelete: 'CASCADE',
 });
-Review.belongsTo(Reviewer, {
-  foreignKey: 'user_id',
-  as: 'reviewer',
+Review.belongsTo(AssignReviewer, {
+  foreignKey: 'assign_reviewer_id',
+  as: 'assignment',
 });
 
 // =====================================================

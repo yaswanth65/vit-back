@@ -18,7 +18,6 @@ import { uploadToR2, deleteFromR2 } from '../../services/r2Services.js';
 export const getAssignedManuscripts = async (req, res) => {
   try {
     const userId = req.user?.id || req.query.user_id;
-    console.log('User ID:', userId);
 
     // First, get the reviewer record for this user
     const reviewer = await Reviewer.findOne({ where: { user_id: userId } });
@@ -26,7 +25,6 @@ export const getAssignedManuscripts = async (req, res) => {
       return res.status(404).json({ message: 'Reviewer profile not found' });
     }
     const reviewerId = reviewer.id;
-    console.log('Reviewer ID:', reviewerId);
 
     const {
       page = 1,
@@ -58,6 +56,12 @@ export const getAssignedManuscripts = async (req, res) => {
         {
           model: Manuscript,
           as: 'manuscript',
+          attributes: ['id', 'title', 'abstract', 'category', 'manuscript_type', 'status', 'keywords', 'main_file', 'cover_letter'],
+        },
+        {
+          model: Review,
+          as: 'review',
+          required: false,
         },
       ],
     });
@@ -79,6 +83,7 @@ export const getAssignedManuscripts = async (req, res) => {
 
 /**
  * ACCEPT REVIEW ASSIGNMENT
+ * NOTE: Does NOT create Review record - that happens on-demand when reviewer first interacts
  */
 export const acceptReviewAssignment = async (req, res) => {
   try {
@@ -102,29 +107,14 @@ export const acceptReviewAssignment = async (req, res) => {
     if (assignment.status !== 'assigned')
       return res.status(400).json({ message: 'Already responded' });
 
-    // update assignment
+    // update assignment status only
+    // Review will be created on-demand when reviewer first interacts
     assignment.status = 'accepted';
     await assignment.save();
-
-    // create review draft
-    const review = await Review.create({
-      assign_reviewer_id: id,
-      manuscript_id: assignment.manuscript_id,
-      reviewer_id: reviewerId,
-      status: 'Draft',
-      originality_score: 1,
-      methodology_score: 1,
-      significance_score: 1,
-      clarity_score: 1,
-      language_score: 1,
-      recommendation: 'Major Revision',
-      comments_to_author: '',
-    });
 
     res.json({
       message: 'Review accepted',
       assignment,
-      review,
     });
   } catch (err) {
     res.status(500).json({ message: err.message });
@@ -168,25 +158,104 @@ export const rejectReviewAssignment = async (req, res) => {
 export const getMyReview = async (req, res) => {
   try {
     const { assignId } = req.params;
+    const userId = req.user?.id;
 
-    const review = await Review.findOne({
-      where: { assign_reviewer_id: assignId },
+    // First, get the reviewer record for this user
+    const reviewer = await Reviewer.findOne({ where: { user_id: userId } });
+    if (!reviewer) {
+      return res.status(404).json({ message: 'Reviewer profile not found' });
+    }
+    const reviewerId = reviewer.id;
+
+    // Get the assignment with manuscript and review data (same structure as getAssignedManuscripts)
+    const assignment = await AssignReviewer.findOne({
+      where: { 
+        assign_reviewer_id: assignId,
+        reviewer_id: reviewerId 
+      },
       include: [
-        {
-          model: ReviewComment,
-          as: 'comments',
-        },
         {
           model: Manuscript,
           as: 'manuscript',
-          attributes: ['id', 'readable_id', 'title', 'category', 'main_file', 'abstract'],
+          attributes: ['id', 'title', 'abstract', 'category', 'manuscript_type', 'status', 'keywords', 'main_file', 'cover_letter'],
+        },
+        {
+          model: Review,
+          as: 'review',
+          required: false,
         },
       ],
     });
 
-    if (!review) return res.status(404).json({ message: 'Review not found' });
+    if (!assignment) {
+      return res.status(404).json({ message: 'Assignment not found' });
+    }
 
-    res.json(review);
+    res.json(assignment);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+};
+
+/**
+ * CREATE REVIEW ON-DEMAND
+ * Called when reviewer first tries to add comment or save scores
+ * If review already exists, return it. Otherwise create with defaults
+ */
+export const createOrGetReview = async (req, res) => {
+  try {
+    const { assignId } = req.params;
+    const userId = req.user?.id;
+
+    // First, get the reviewer record for this user
+    const reviewer = await Reviewer.findOne({ where: { user_id: userId } });
+    if (!reviewer) {
+      return res.status(404).json({ message: 'Reviewer profile not found' });
+    }
+    const reviewerId = reviewer.id;
+
+    // Get the assignment to verify access and get manuscript_id
+    const assignment = await AssignReviewer.findOne({
+      where: { 
+        assign_reviewer_id: assignId,
+        reviewer_id: reviewerId 
+      },
+    });
+
+    if (!assignment) {
+      return res.status(404).json({ message: 'Assignment not found' });
+    }
+
+    if (assignment.status !== 'accepted') {
+      return res.status(400).json({ message: 'Assignment must be accepted first' });
+    }
+
+    // Check if review already exists
+    let review = await Review.findOne({
+      where: { assign_reviewer_id: assignId },
+    });
+
+    // If it doesn't exist, create it
+    if (!review) {
+      review = await Review.create({
+        assign_reviewer_id: assignId,
+        manuscript_id: assignment.manuscript_id,
+        reviewer_id: reviewerId,
+        status: 'Draft',
+        originality_score: 1,
+        methodology_score: 1,
+        significance_score: 1,
+        clarity_score: 1,
+        language_score: 1,
+        recommendation: 'Major Revision',
+        comments_to_author: '',
+      });
+    }
+
+    res.json({
+      message: review.isNewRecord ? 'Review created' : 'Review already exists',
+      review,
+    });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }

@@ -70,6 +70,15 @@ router.get(
   requireRole('Reviewer'),
   reviewerController.getMyReview
 );
+
+// Create or get review on-demand (called when first interacting with review)
+router.post(
+  '/assignment/:assignId/review',
+  requireAuth,
+  requireRole('Reviewer'),
+  reviewerController.createOrGetReview
+);
+
 router.put(
   '/review/:reviewId',
   requireAuth,
