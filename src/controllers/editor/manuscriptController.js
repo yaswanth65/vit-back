@@ -701,13 +701,19 @@ export const submitToEIC = async (req, res) => {
             return res.status(403).json({ message: 'Editor profile not found' });
         }
 
-        const manuscript = await Manuscript.findByPk(id);
+        // Support both UUID and readable_id (e.g., MS-2026-001)
+        const isReadableId = id.startsWith('MS-');
+        const whereClause = isReadableId ? { readable_id: id } : { id };
+
+        const manuscript = await Manuscript.findOne({ where: whereClause });
         if (!manuscript) {
             return res.status(404).json({ message: 'Manuscript not found' });
         }
 
-        // Verify manuscript category matches editor's assigned category
-        if (manuscript.category !== editor.assigned_category) {
+        // Verify manuscript category matches editor's assigned category (case-insensitive)
+        const manuscriptCat = (manuscript.category || '').toLowerCase();
+        const editorCat = (editor.assigned_category || '').toLowerCase();
+        if (manuscriptCat !== editorCat) {
             return res.status(403).json({
                 message: 'You can only handle manuscripts in your assigned category'
             });
@@ -716,7 +722,7 @@ export const submitToEIC = async (req, res) => {
         // Check if all assigned reviewers have completed their reviews
         const pendingReviews = await AssignReviewer.count({
             where: {
-                manuscript_id: id,
+                manuscript_id: manuscript.id, // Use actual UUID for query
                 status: { [Op.notIn]: ['completed', 'rejected'] }
             }
         });
