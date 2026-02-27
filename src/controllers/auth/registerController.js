@@ -6,6 +6,7 @@ import {
 } from '../../database/models/index.js';
 import academicService from '../../services/auth/academicService.js';
 import registrationService from '../../services/auth/registerationService.js';
+import tokenService from '../../services/auth/tokenService.js';
 import bcrypt from 'bcrypt';
 
 
@@ -17,7 +18,17 @@ const registerStepOne = async (req, res) => {
   try {
     const { email, password } = req.body;
 
-    const existingUser = await User.findOne({ where: { email } });
+    // Validate email format
+    if (!email || !email.includes('@')) {
+      return res.status(400).json({ message: 'Please provide a valid email address' });
+    }
+
+    // Validate password
+    if (!password || password.length < 8) {
+      return res.status(400).json({ message: 'Password must be at least 8 characters long' });
+    }
+
+    const existingUser = await User.findOne({ where: { email: email.toLowerCase().trim() } });
 
     if (existingUser)
       return res.status(400).json({ message: 'Email already registered.' });
@@ -27,7 +38,9 @@ const registerStepOne = async (req, res) => {
     await sequelize.transaction(async (t) => {
       const newUser = await User.create(
         {
-          email,
+          email: email.toLowerCase().trim(),
+          first_name: 'User',
+          last_name: 'Profile',
           role: 'Author',
           is_active: false,
         },
@@ -39,6 +52,7 @@ const registerStepOne = async (req, res) => {
           user_id: newUser.id,
           password_hash: passwordHash,
           registration_step: '2',
+          is_registration_verified: false,
         },
         { transaction: t }
       );
@@ -48,10 +62,12 @@ const registerStepOne = async (req, res) => {
 
     res.json({
       message: 'OTP sent',
+      email: email.toLowerCase().trim(),
     });
 
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    console.error('Registration Step 1 Error:', error);
+    res.status(500).json({ message: error.message || 'Registration failed' });
   }
 };
 
@@ -94,9 +110,6 @@ const verifyOTP = async (req, res) => {
 /**
  * Step 3: Finalize (Profile + Metrics)
  */
-/**
- * Step 3: Finalize (Profile + Metrics)
- */
 const finalizeRegistration = async (req, res) => {
   const t = await sequelize.transaction();
 
@@ -112,8 +125,30 @@ const finalizeRegistration = async (req, res) => {
       academicProfile,
     } = req.body;
 
+    // Validate required fields
+    if (!first_name || first_name.trim().length < 2) {
+      await t.rollback();
+      return res.status(400).json({
+        message: 'First name is required (minimum 2 characters)',
+      });
+    }
+
+    if (!last_name || last_name.trim().length < 2) {
+      await t.rollback();
+      return res.status(400).json({
+        message: 'Last name is required (minimum 2 characters)',
+      });
+    }
+
+    if (!institution || institution.trim().length < 2) {
+      await t.rollback();
+      return res.status(400).json({
+        message: 'Institution is required',
+      });
+    }
+
     const user = await User.findOne({
-      where: { email },
+      where: { email: email.toLowerCase().trim() },
       transaction: t,
     });
 
@@ -142,10 +177,9 @@ const finalizeRegistration = async (req, res) => {
 
     await user.update(
       {
-        prefix,
-        first_name,
-        last_name,
-        institution,
+        prefix: prefix || null,
+        first_name: first_name.trim(),
+        last_name: last_name.trim(),
         is_active: true,
       },
       { transaction: t }
@@ -170,13 +204,13 @@ const finalizeRegistration = async (req, res) => {
         saml_student_id:
           provider === 'saml' ? providerId : null,
 
-        institution: institution || academicProfile?.institution,
+        institution: institution.trim() || academicProfile?.institution,
 
-        department: department || academicProfile?.department,
+        department: department?.trim() || academicProfile?.department || 'Not specified',
 
-        country: academicProfile?.country || null,
+        country: academicProfile?.country || 'Not specified',
 
-        research_interests: interests,
+        research_interests: Array.isArray(interests) ? interests : [],
 
         h_index: academicProfile?.metrics?.h_index || 0,
 
@@ -200,18 +234,50 @@ const finalizeRegistration = async (req, res) => {
       { transaction: t }
     );
 
+    // =====================
+    // Generate tokens
+    // =====================
+    const { accessToken, refreshToken, refreshExpires } = await tokenService.generateAuthTokens(user);
+    const hashedRefreshToken = await tokenService.hashRefreshToken(refreshToken);
+
+    await authMeta.update(
+      {
+        current_refresh_token: hashedRefreshToken,
+      },
+      { transaction: t }
+    );
+
     await t.commit();
+
+    // Set refresh token as HTTP-only cookie
+    res.cookie('refreshToken', refreshToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+    });
 
     res.json({
       success: true,
       message: 'Registration complete',
+      accessToken,
+      user: {
+        id: user.id,
+        email: user.email,
+        first_name: user.first_name,
+        last_name: user.last_name,
+        role: user.role,
+        prefix: user.prefix || null,
+        status: user.is_active ? 'active' : 'inactive',
+      },
     });
 
   } catch (error) {
     await t.rollback();
+    console.error('Finalize Registration Error:', error);
 
     res.status(500).json({
-      message: error.message,
+      message: error.message || 'Registration failed',
     });
   }
 };
@@ -223,8 +289,8 @@ const resendOTP = async (req, res) => {
   try {
     const { email } = req.body;
 
-    // Reuses the same service logic (including cooldown & email sending)
-    await registrationService.requestRegistrationOTP(email);
+    // Reuses the same service logic with isResend=true to enforce cooldown
+    await registrationService.requestRegistrationOTP(email, true);
 
     res.json({ message: 'A new verification code has been sent.' });
   } catch (error) {
@@ -463,7 +529,7 @@ export const googleScholarCallback = async (req, res) => {
     const displayName = profile.displayName;
 
     // ================================
-    // Email validation (UNCHANGED LOGIC)
+    // Email validation
     // ================================
     if (!email) {
       return res.redirect(
@@ -472,16 +538,48 @@ export const googleScholarCallback = async (req, res) => {
     }
 
     // ================================
-    // Duplicate check (UNCHANGED LOGIC)
+    // Check if user already exists
     // ================================
     const existingUser = await User.findOne({
-      where: { email },
+      where: { email: email.toLowerCase() },
     });
 
+    // ================================
+    // HANDLE LOGIN: If user exists and is fully registered
+    // ================================
     if (existingUser) {
-      return res.redirect(
-        `${process.env.FRONTEND_URL}/login?error=account_exists&provider=google_scholar`
-      );
+      // Check if user is fully registered and active
+      if (existingUser.is_active) {
+        // User is fully registered - LOG THEM IN
+        const tokens = await tokenService.generateAuthTokens(existingUser);
+        
+        // Hash refresh token and update AuthenticationMeta
+        const hashedRefreshToken = await tokenService.hashRefreshToken(tokens.refreshToken);
+        await AuthenticationMeta.update(
+          { 
+            current_refresh_token: hashedRefreshToken,
+            refresh_token_expires_at: tokens.refreshExpires,
+            last_login: new Date()
+          },
+          { where: { user_id: existingUser.id } }
+        );
+
+        // Encode login data for frontend
+        const loginData = Buffer.from(JSON.stringify({
+          type: 'login',
+          accessToken: tokens.accessToken,
+          user: existingUser.toSafeObject(),
+        })).toString('base64');
+
+        return res.redirect(
+          `${process.env.FRONTEND_URL}/oauth-success?data=${loginData}`
+        );
+      } else {
+        // User exists but not fully registered - redirect with error
+        return res.redirect(
+          `${process.env.FRONTEND_URL}/register?error=incomplete_registration&provider=google_scholar`
+        );
+      }
     }
 
     // ================================

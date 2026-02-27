@@ -7,7 +7,7 @@ import { MultiSamlStrategy as SamlStrategy } from 'passport-saml';
 passport.use(new GoogleStrategy({
     clientID: process.env.GOOGLE_CLIENT_ID,
     clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-    callbackURL: "/api/auth/google/callback",
+    callbackURL: process.env.GOOGLE_CALLBACK_URL || "http://localhost:5001/api/v1/auth/google/callback",
     state: true, // MUST BE TRUE to prevent CSRF attacks
   },
   (accessToken, refreshToken, profile, done) => {
@@ -21,7 +21,7 @@ passport.use(new OrcidStrategy({
     sandbox: process.env.NODE_ENV !== 'production', // Use sandbox for dev
     clientID: process.env.ORCID_CLIENT_ID,
     clientSecret: process.env.ORCID_CLIENT_SECRET,
-    callbackURL: "/api/auth/orcid/callback"
+    callbackURL: process.env.ORCID_REDIRECT_URI || "http://localhost:5001/api/v1/auth/orcid/callback"
   },
   (accessToken, refreshToken, params, profile, done) => {
     // params contains the orcid id

@@ -48,18 +48,18 @@ User.init(
     },
     first_name: {
       type: DataTypes.STRING(100),
-      allowNull: false,
+      allowNull: true,
+      defaultValue: 'User',
       validate: {
-        notEmpty: true,
-        len: [2, 100],
+        len: [0, 100],
       },
     },
     last_name: {
       type: DataTypes.STRING(100),
-      allowNull: false,
+      allowNull: true,
+      defaultValue: 'Profile',
       validate: {
-        notEmpty: true,
-        len: [2, 100],
+        len: [0, 100],
       },
     },
 

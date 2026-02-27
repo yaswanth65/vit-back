@@ -5,13 +5,15 @@ import emailService from '../emailService.js';
 /**
  * Handles generating, hashing, and sending OTP
  * Used for both initial registration and resends
+ * @param {string} email - User email
+ * @param {boolean} isResend - Whether this is a resend request (applies cooldown)
  */
-export const requestRegistrationOTP = async (email) => {
+export const requestRegistrationOTP = async (email, isResend = false) => {
   const authMeta = await AuthenticationMeta.findOne({
     include: [{ 
       model: User,
-      as: 'user', // Required alias
-      where: { email, is_active: false } // Only for accounts in progress
+      as: 'user',
+      where: { email: email.toLowerCase().trim(), is_active: false }
     }]
   });
 
@@ -19,8 +21,8 @@ export const requestRegistrationOTP = async (email) => {
     throw new Error('Registration not found or already completed.');
   }
 
-  // Cooldown check (1 minute)
-  if (!otpService.canResend(authMeta.updated_at)) {
+  // Cooldown check (1 minute) - ONLY for resend requests
+  if (isResend && !otpService.canResend(authMeta.updatedAt)) {
     throw new Error('Please wait 1 minute before requesting a new code.');
   }
 
@@ -28,7 +30,7 @@ export const requestRegistrationOTP = async (email) => {
   const { otp, expiresAt } = otpService.generateOTP();
   const hashedOtp = await otpService.hashOTP(otp);
 
-  // 2. Update Database
+  // 2. Update Database (updated_at will auto-update)
   await authMeta.update({
     registration_otp: hashedOtp,
     registration_otp_expires_at: expiresAt
@@ -41,9 +43,6 @@ export const requestRegistrationOTP = async (email) => {
 };
 
 /**
- * Logic to verify the provided OTP
- */
-/**
  * Logic to verify the provided OTP (Service Layer)
  */
 const verifyRegistrationOTP = async (email, rawOtp) => {
@@ -51,8 +50,8 @@ const verifyRegistrationOTP = async (email, rawOtp) => {
   const authMeta = await AuthenticationMeta.findOne({
     include: [{ 
       model: User,
-      as: 'user', // Required alias
-      where: { email, is_active: false } 
+      as: 'user',
+      where: { email: email.toLowerCase().trim(), is_active: false } 
     }]
   });
 

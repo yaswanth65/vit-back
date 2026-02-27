@@ -83,24 +83,26 @@ Manuscript.init(
       allowNull: true,
     },
     // ==================== FILE MANAGEMENT ====================
-    // Main Manuscript (DOCX)
+    // Main Manuscript (PDF or DOCX)
     main_file: {
       type: DataTypes.JSONB,
       allowNull: true,
       validate: {
-        isDocx(value) {
-          if (
-            value &&
-            value.mimetype !==
-            'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
-          ) {
-            throw new Error(
-              'Only DOCX files are allowed for the main manuscript submission.'
-            );
+        isValidDocument(value) {
+          if (value && value.mimetype) {
+            const allowedTypes = [
+              'application/pdf',
+              'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+            ];
+            if (!allowedTypes.includes(value.mimetype)) {
+              throw new Error(
+                'Only PDF or DOCX files are allowed for manuscript submission.'
+              );
+            }
           }
         },
       },
-      comment: 'Restricted to DOCX for AI parsing',
+      comment: 'Main manuscript file (PDF or DOCX)',
     },
 
     // Cover Letter
