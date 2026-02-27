@@ -118,6 +118,13 @@ export const getManuscripts = async (req, res) => {
             where: whereClause,
             limit: Number(limit),
             offset: Number(offset),
+            include: [{
+                model: AssignReviewer,
+                as: 'assignments',
+                required: false,
+                where: { status: { [Op.notIn]: ['rejected'] } }
+            }],
+            distinct: true, // Important when using include with findAndCountAll
             // order: [['createdAt', 'DESC']],
         });
 
@@ -191,9 +198,16 @@ export const getManuscriptsById = async (req, res) => {
             return res.status(404).json({ message: 'Manuscript Not Found' });
         }
 
-        // Verify manuscript is in editor's category
-        if (manuscript.category !== editor.assigned_category) {
-            return res.status(403).json({ message: 'You do not have permission to view this manuscript' });
+        // Verify manuscript is in editor's category (case-insensitive)
+        const manuscriptCat = (manuscript.category || '').toLowerCase();
+        const editorCat = (editor.assigned_category || '').toLowerCase();
+        
+        if (manuscriptCat !== editorCat) {
+            console.log('Category mismatch:', { manuscript_category: manuscript.category, editor_category: editor.assigned_category });
+            return res.status(403).json({ 
+                message: 'You do not have permission to view this manuscript',
+                details: { manuscript_category: manuscript.category, editor_category: editor.assigned_category }
+            });
         }
 
         res.json({

@@ -5,6 +5,13 @@ class Author extends Model {}
 
 Author.init(
   {
+    // ==================== PRIMARY KEY ====================
+    id: {
+      type: DataTypes.UUID,
+      defaultValue: DataTypes.UUIDV4,
+      primaryKey: true,
+    },
+
     // Foreign Key to the Common User Table
     user_id: {
       type: DataTypes.UUID,

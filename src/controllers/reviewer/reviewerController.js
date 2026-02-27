@@ -17,8 +17,16 @@ import { uploadToR2, deleteFromR2 } from '../../services/r2Services.js';
  */
 export const getAssignedManuscripts = async (req, res) => {
   try {
-    const reviewerId = req.user?.id || req.query.user_id;
-    console.log(reviewerId)
+    const userId = req.user?.id || req.query.user_id;
+    console.log('User ID:', userId);
+
+    // First, get the reviewer record for this user
+    const reviewer = await Reviewer.findOne({ where: { user_id: userId } });
+    if (!reviewer) {
+      return res.status(404).json({ message: 'Reviewer profile not found' });
+    }
+    const reviewerId = reviewer.id;
+    console.log('Reviewer ID:', reviewerId);
 
     const {
       page = 1,
@@ -75,10 +83,17 @@ export const getAssignedManuscripts = async (req, res) => {
 export const acceptReviewAssignment = async (req, res) => {
   try {
     const { id } = req.params;
-    const reviewerId = req.user?.id || req.body.user_id;
+    const userId = req.user?.id || req.body.user_id;
+
+    // First, get the reviewer record for this user
+    const reviewer = await Reviewer.findOne({ where: { user_id: userId } });
+    if (!reviewer) {
+      return res.status(404).json({ message: 'Reviewer profile not found' });
+    }
+    const reviewerId = reviewer.id;
 
     const assignment = await AssignReviewer.findOne({
-      where: { assign_reviewer_id: id, user_id: reviewerId },
+      where: { assign_reviewer_id: id, reviewer_id: reviewerId },
     });
 
     if (!assignment)
@@ -95,7 +110,7 @@ export const acceptReviewAssignment = async (req, res) => {
     const review = await Review.create({
       assign_reviewer_id: id,
       manuscript_id: assignment.manuscript_id,
-      user_id: reviewerId,
+      reviewer_id: reviewerId,
       status: 'Draft',
       originality_score: 1,
       methodology_score: 1,
@@ -122,10 +137,17 @@ export const acceptReviewAssignment = async (req, res) => {
 export const rejectReviewAssignment = async (req, res) => {
   try {
     const { id } = req.params;
-    const reviewerId = req.user?.id || req.body.user_id;
+    const userId = req.user?.id || req.body.user_id;
+
+    // First, get the reviewer record for this user
+    const reviewer = await Reviewer.findOne({ where: { user_id: userId } });
+    if (!reviewer) {
+      return res.status(404).json({ message: 'Reviewer profile not found' });
+    }
+    const reviewerId = reviewer.id;
 
     const assignment = await AssignReviewer.findOne({
-      where: { assign_reviewer_id: id, user_id: reviewerId },
+      where: { assign_reviewer_id: id, reviewer_id: reviewerId },
     });
 
     if (!assignment)
