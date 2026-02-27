@@ -28,6 +28,9 @@ temp/
 .env
 .env.local
 .env.*.local
+
+# BUT keep .env.prod tracked for deployment reference
+!.env.prod
 .env.test
 .env.production
 
