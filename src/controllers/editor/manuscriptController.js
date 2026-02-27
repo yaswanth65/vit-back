@@ -154,7 +154,14 @@ export const getManuscriptsById = async (req, res) => {
             return res.status(404).json({ message: 'Editor profile not found' });
         }
 
-        const manuscript = await Manuscript.findByPk(manuscript_id, {
+        // Support both UUID and readable_id (e.g., MS-2026-001)
+        const isReadableId = manuscript_id.startsWith('MS-');
+        const whereClause = isReadableId 
+            ? { readable_id: manuscript_id }
+            : { id: manuscript_id };
+
+        const manuscript = await Manuscript.findOne({
+            where: whereClause,
             include: [
                 {
                     model: Author,

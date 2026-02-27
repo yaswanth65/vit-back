@@ -26,13 +26,6 @@ const login = async (req, res) => {
 
     // Verify credentials via service
     const user = await authService.loginWithPassword(email, password);
-    
-    // Log user role for debugging
-    console.log('🔐 User Login:', {
-      email: user.email,
-      role: user.role,
-      userId: user.id
-    });
 
     // Generate tokens
     const tokens = await tokenService.generateAuthTokens(user);
@@ -48,13 +41,10 @@ const login = async (req, res) => {
       { where: { user_id: user.id } }
     );
 
-    const safeUser = user.toSafeObject();
-    console.log('📤 Sending user data:', { role: safeUser.role, email: safeUser.email });
-
     // Set Cookie and send response
     setTokenCookie(res, tokens.refreshToken, tokens.refreshExpires);
     res.json({
-      user: safeUser,
+      user: user.toSafeObject(),
       accessToken: tokens.accessToken
     });
   } catch (error) {
